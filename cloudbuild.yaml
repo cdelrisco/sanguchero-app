@@ -1,0 +1,27 @@
+steps:
+  # PASO 1: Desplegar el Backend (Cloud Functions)
+  - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
+    entrypoint: 'bash'
+    args:
+      - '-c'
+      - |
+        echo "🚀 Desplegando Microservicios en Cloud Functions..."
+        gcloud functions deploy procesar-cierre --gen2 --runtime=python311 --region=us-central1 --source=. --entry-point=recibir_cierre_dia --trigger-http --allow-unauthenticated
+        gcloud functions deploy descargar-menu --gen2 --runtime=python311 --region=us-central1 --source=. --entry-point=descargar_menu --trigger-http --allow-unauthenticated
+        gcloud functions deploy gestionar-catalogo --gen2 --runtime=python311 --region=us-central1 --source=. --entry-point=gestionar_catalogo --trigger-http --allow-unauthenticated
+        gcloud functions deploy obtener-dashboard --gen2 --runtime=python311 --region=us-central1 --source=. --entry-point=obtener_dashboard --trigger-http --allow-unauthenticated
+        gcloud functions deploy login-admin --gen2 --runtime=python311 --region=us-central1 --source=. --entry-point=login_admin --trigger-http --allow-unauthenticated
+
+  # PASO 2: Desplegar el Frontend (Cloud Storage)
+  - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
+    entrypoint: 'bash'
+    args:
+      - '-c'
+      - |
+        echo "🌐 Actualizando páginas web en Cloud Storage..."
+        # Reemplaza 'mi-sangucheria-site' por el nombre real de tu bucket
+        gcloud storage cp index.html gs://mi-sangucheria-site/
+        gcloud storage cp admin.html gs://mi-sangucheria-site/
+
+options:
+  logging: CLOUD_LOGGING_ONLY

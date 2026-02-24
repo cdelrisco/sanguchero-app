@@ -1,0 +1,169 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Punto de Venta - Sanguchero</title>
+    <style>
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #f4f4f9; margin: 0; padding: 20px; }
+        .app-container { max-width: 400px; margin: 0 auto; background: white; padding: 20px; border-radius: 10px; box-shadow: 0 4px 8px rgba(0,0,0,0.1); }
+        h2 { text-align: center; color: #333; margin-top: 0; margin-bottom: 5px;}
+        .estado-red { text-align: center; font-size: 12px; color: #6b7280; margin-bottom: 20px; }
+        
+        /* Cuadrícula de botones gigantes */
+        .grid-productos { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-bottom: 30px; }
+        
+        /* Estilo del botón "Fricción Cero" */
+        .btn-producto { background-color: #e0f2fe; border: 2px solid #0284c7; border-radius: 10px; padding: 15px 5px; font-size: 15px; font-weight: bold; color: #0369a1; cursor: pointer; transition: transform 0.1s; display: flex; flex-direction: column; align-items: center; justify-content: center; height: 110px; position: relative;}
+        .btn-producto:active { transform: scale(0.95); background-color: #bae6fd; }
+        .precio { font-size: 13px; color: #0284c7; font-weight: normal; margin-top: 5px;}
+        .contador-badge { background: #ef4444; color: white; border-radius: 50%; width: 25px; height: 25px; display: flex; align-items: center; justify-content: center; font-size: 14px; position: absolute; top: -10px; right: -10px; display: none; font-weight: bold;}
+        
+        /* Botones de acción */
+        .btn-cierre { background-color: #10b981; color: white; border: none; padding: 15px; width: 100%; font-size: 16px; font-weight: bold; border-radius: 8px; cursor: pointer; margin-top: 10px; }
+        .btn-cierre:hover { background-color: #059669; }
+        .btn-recargar { background-color: #f59e0b; color: white; border: none; padding: 10px; width: 100%; font-size: 14px; font-weight: bold; border-radius: 8px; cursor: pointer; margin-top: 10px; }
+        
+        /* Área de consola simulada */
+        .consola { background: #1e293b; color: #10b981; padding: 15px; border-radius: 8px; margin-top: 20px; font-family: monospace; font-size: 12px; white-space: pre-wrap; display: none; overflow-x: auto;}
+    </style>
+</head>
+<body>
+
+<div class="app-container">
+    <h2>🥪 Mi Sanguchería</h2>
+    <div class="estado-red" id="estado-app">Iniciando aplicación...</div>
+    
+    <div class="grid-productos" id="contenedor-botones"></div>
+
+    <button class="btn-cierre" onclick="generarCierre()">Cerrar Día y Sincronizar</button>
+    <button class="btn-recargar" onclick="cargarMenuDeLaNube()">🔄 Actualizar Menú (Requiere WiFi)</button>
+
+    <div class="consola" id="salida-json"></div>
+</div>
+
+<script>
+    // --- TUS URLs REALES DE GOOGLE CLOUD ---
+    const URL_DESCARGAR_MENU = "https://descargar-menu-stwcjbliwa-uc.a.run.app";
+    const URL_PROCESAR_CIERRE = "https://procesar-cierre-stwcjbliwa-uc.a.run.app";
+
+    let menuMatutino = []; 
+    let ventasDelDia = {};
+
+    // 1. ARRANCAR LA APP: Intentar descargar menú o usar el guardado
+    async function cargarMenuDeLaNube() {
+        const estado = document.getElementById('estado-app');
+        const contenedor = document.getElementById('contenedor-botones');
+        
+        estado.innerText = "📡 Descargando menú actualizado...";
+        contenedor.innerHTML = ""; // Limpiamos la pantalla
+
+        try {
+            // Llamada a tu nueva función en Python
+            const respuesta = await fetch(URL_DESCARGAR_MENU);
+            if (!respuesta.ok) throw new Error("Error en el servidor");
+            
+            const datos = await respuesta.json();
+            menuMatutino = datos.menu;
+            
+            // EL SECRETO OFFLINE: Guardamos el menú en la memoria del celular
+            localStorage.setItem('menuOffline', JSON.stringify(menuMatutino));
+            estado.innerText = "✅ Menú actualizado. ¡Listo para trabajar offline!";
+            
+        } catch (error) {
+            // Si no hay internet, buscamos en la memoria
+            const menuGuardado = localStorage.getItem('menuOffline');
+            if (menuGuardado) {
+                menuMatutino = JSON.parse(menuGuardado);
+                estado.innerText = "📶 Sin internet. Usando menú guardado en memoria.";
+            } else {
+                estado.innerText = "❌ Sin internet y sin menú guardado. Necesitas WiFi.";
+                return;
+            }
+        }
+
+        renderizarBotones();
+    }
+
+    // 2. DIBUJAR LOS BOTONES CON LOS PRECIOS REALES
+    function renderizarBotones() {
+        const contenedor = document.getElementById('contenedor-botones');
+        contenedor.innerHTML = ""; // Limpiar antes de dibujar
+        
+        menuMatutino.forEach(producto => {
+            const btn = document.createElement('button');
+            btn.className = 'btn-producto';
+            btn.onclick = () => registrarVenta(producto.id_prod);
+            
+            btn.innerHTML = `
+                <div class="contador-badge" id="badge-${producto.id_prod}">0</div>
+                <span>${producto.nombre}</span>
+                <span class="precio">S/ ${producto.precio.toFixed(2)}</span>
+            `;
+            contenedor.appendChild(btn);
+        });
+    }
+
+    // 3. REGISTRAR VENTA (Fricción cero offline)
+    function registrarVenta(id_prod) {
+        if (!ventasDelDia[id_prod]) ventasDelDia[id_prod] = 0;
+        ventasDelDia[id_prod]++;
+        
+        const badge = document.getElementById(`badge-${id_prod}`);
+        badge.innerText = ventasDelDia[id_prod];
+        badge.style.display = 'flex';
+    }
+
+    // 4. EL CIERRE DE CAJA (Sincronización a la nube)
+    async function generarCierre() {
+        const payload_crudas = Object.keys(ventasDelDia).map(key => {
+            return { id_prod: key, cantidad: ventasDelDia[key] };
+        });
+
+        if (payload_crudas.length === 0) {
+            alert("No hay ventas registradas hoy.");
+            return;
+        }
+
+        const salida = document.getElementById('salida-json');
+        salida.style.display = 'block';
+        salida.innerHTML = "☁️ Sincronizando con Google Cloud...";
+
+        const paqueteFinal = {
+            vendedor_id: "sangucheria_carlitos",
+            ventas: payload_crudas
+        };
+
+        try {
+            // Llamada a tu primera función en Python
+            const respuesta = await fetch(URL_PROCESAR_CIERRE, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(paqueteFinal)
+            });
+
+            const datosRespuesta = await respuesta.json();
+
+            if (respuesta.ok) {
+                salida.innerHTML = "✅ ¡Cierre de Caja Exitoso!\n\n" + 
+                                   "El ID de tu recibo es:\n" + datosRespuesta.id_recibo;
+                
+                // Reiniciar todo
+                ventasDelDia = {};
+                renderizarBotones(); 
+                alert(`¡Día cerrado! El total en caja debe ser: S/ ${datosRespuesta.total_calculado.toFixed(2)}`);
+            } else {
+                salida.innerHTML = "❌ Error en el servidor:\n" + JSON.stringify(datosRespuesta, null, 2);
+            }
+
+        } catch (error) {
+            salida.innerHTML = "❌ Error de conexión. Revisa tu internet para hacer el cierre.\n" + error.message;
+        }
+    }
+
+    // Arrancar la app automáticamente
+    window.onload = cargarMenuDeLaNube;
+</script>
+
+</body>
+</html>

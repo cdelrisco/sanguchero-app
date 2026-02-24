@@ -1,0 +1,247 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Terminal POS - CloudPOS</title>
+    <style>
+        :root { --primary: #3b82f6; --bg-main: #f1f5f9; --dark: #0f172a; --panel: #ffffff; --border: #e2e8f0; }
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: var(--bg-main); margin: 0; padding: 0; height: 100vh; display: flex; flex-direction: column; color: #334155;}
+        
+        /* Header */
+        header { background-color: var(--dark); color: white; padding: 15px 20px; display: flex; justify-content: space-between; align-items: center; box-shadow: 0 2px 4px rgba(0,0,0,0.1); z-index: 10;}
+        header h1 { margin: 0; font-size: 20px; }
+        header h1 span { color: var(--primary); }
+        .status-badge { background-color: #10b981; color: white; padding: 5px 10px; border-radius: 20px; font-size: 12px; font-weight: bold; display: flex; align-items: center; gap: 5px;}
+        
+        /* Layout Principal */
+        .pos-container { display: flex; flex-grow: 1; overflow: hidden; }
+        
+        /* Panel Izquierdo: Catálogo */
+        .panel-menu { flex: 2; padding: 20px; overflow-y: auto; }
+        .grid-productos { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 15px; }
+        .btn-producto { background: var(--panel); border: 2px solid transparent; border-radius: 12px; padding: 20px 10px; text-align: center; cursor: pointer; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05); transition: all 0.1s; display: flex; flex-direction: column; justify-content: center; height: 120px; position: relative;}
+        .btn-producto:hover { border-color: var(--primary); transform: translateY(-2px); box-shadow: 0 10px 15px -3px rgba(0,0,0,0.1); }
+        .btn-producto:active { transform: scale(0.95); }
+        .prod-nombre { font-weight: bold; font-size: 14px; color: var(--dark); margin-bottom: 5px;}
+        .prod-precio { color: var(--primary); font-size: 14px; font-weight: 600;}
+        
+        /* Panel Derecho: El Ticket / Carrito */
+        .panel-ticket { flex: 1; min-width: 300px; max-width: 400px; background: var(--panel); border-left: 1px solid var(--border); display: flex; flex-direction: column; box-shadow: -2px 0 5px rgba(0,0,0,0.02);}
+        .ticket-header { padding: 20px; border-bottom: 1px solid var(--border); background-color: #f8fafc; }
+        .ticket-header h2 { margin: 0; font-size: 18px; color: var(--dark); }
+        
+        .ticket-items { flex-grow: 1; overflow-y: auto; padding: 10px 20px; }
+        .item-row { display: flex; justify-content: space-between; align-items: center; padding: 10px 0; border-bottom: 1px dashed var(--border); font-size: 14px;}
+        .item-info { flex-grow: 1; }
+        .item-nombre { font-weight: bold; color: var(--dark); }
+        .item-detalle { font-size: 12px; color: #64748b; }
+        .item-total { font-weight: bold; color: var(--dark); }
+        .btn-quitar { background: #fee2e2; color: #ef4444; border: none; border-radius: 4px; width: 25px; height: 25px; cursor: pointer; font-weight: bold; margin-left: 10px;}
+        
+        .ticket-footer { padding: 20px; border-top: 1px solid var(--border); background-color: #f8fafc; }
+        .total-row { display: flex; justify-content: space-between; font-size: 22px; font-weight: bold; color: var(--dark); margin-bottom: 20px;}
+        
+        .btn-cobrar { background-color: #10b981; color: white; border: none; padding: 15px; width: 100%; font-size: 18px; font-weight: bold; border-radius: 8px; cursor: pointer; transition: 0.2s; box-shadow: 0 4px 6px rgba(16, 185, 129, 0.2);}
+        .btn-cobrar:hover { background-color: #059669; }
+        .btn-cobrar:disabled { background-color: #94a3b8; cursor: not-allowed; box-shadow: none;}
+        
+        .btn-limpiar { background-color: transparent; color: #64748b; border: 1px solid #cbd5e1; padding: 10px; width: 100%; font-size: 14px; font-weight: bold; border-radius: 8px; cursor: pointer; margin-top: 10px;}
+        .btn-limpiar:hover { background-color: #e2e8f0; }
+        
+        .loader { display: none; text-align: center; padding: 20px; color: #64748b; font-weight: bold;}
+    </style>
+</head>
+<body>
+
+    <header>
+        <h1>☁️ Cloud<span>POS</span> - Terminal Principal</h1>
+        <div class="status-badge" id="estado-red">🟢 Online</div>
+    </header>
+
+    <div class="pos-container">
+        <div class="panel-menu">
+            <div id="loader-menu" class="loader" style="display: block;">Descargando menú de la base de datos...</div>
+            <div class="grid-productos" id="contenedor-botones">
+                </div>
+        </div>
+
+        <div class="panel-ticket">
+            <div class="ticket-header">
+                <h2>Orden Actual</h2>
+            </div>
+            
+            <div class="ticket-items" id="ticket-lista">
+                <div style="text-align: center; color: #94a3b8; margin-top: 40px; font-size: 14px;">
+                    Haz clic en un producto para agregarlo a la orden.
+                </div>
+            </div>
+            
+            <div class="ticket-footer">
+                <div class="total-row">
+                    <span>Total</span>
+                    <span id="ticket-total">S/ 0.00</span>
+                </div>
+                <button class="btn-cobrar" id="btn-cobrar" onclick="procesarVenta()" disabled>Emitir Recibo y Cobrar</button>
+                <button class="btn-limpiar" onclick="limpiarTicket()">🗑️ Cancelar Orden</button>
+            </div>
+        </div>
+    </div>
+
+<script>
+    // TUS URLs DE CLOUD FUNCTIONS
+    const URL_DESCARGAR_MENU = "https://descargar-menu-stwcjbliwa-uc.a.run.app";
+    const URL_PROCESAR_VENTA = "https://procesar-cierre-stwcjbliwa-uc.a.run.app";
+
+    let menuActivo = {}; 
+    let ordenActual = {}; 
+
+    // 1. ARRANCAR LA TERMINAL: Descargar menú en vivo
+    window.onload = async () => {
+        try {
+            // Añadimos ?t=... para evitar que el navegador use caché viejo y siempre traiga precios frescos
+            const respuesta = await fetch(URL_DESCARGAR_MENU + "?t=" + new Date().getTime());
+            if (!respuesta.ok) throw new Error("Fallo la red");
+            
+            const datos = await respuesta.json();
+            
+            // Transformamos el array en un diccionario para uso fácil
+            datos.menu.forEach(p => {
+                menuActivo[p.id_prod] = p;
+            });
+            
+            document.getElementById('loader-menu').style.display = 'none';
+            renderizarBotones();
+            
+        } catch (error) {
+            document.getElementById('loader-menu').innerText = "❌ Error de conexión. Revisa tu internet.";
+            document.getElementById('estado-red').style.backgroundColor = "#ef4444";
+            document.getElementById('estado-red').innerText = "🔴 Offline";
+        }
+    };
+
+    // 2. DIBUJAR EL MENÚ
+    function renderizarBotones() {
+        const contenedor = document.getElementById('contenedor-botones');
+        contenedor.innerHTML = ""; 
+        
+        Object.values(menuActivo).forEach(producto => {
+            const btn = document.createElement('div');
+            btn.className = 'btn-producto';
+            btn.onclick = () => agregarAlTicket(producto.id_prod);
+            
+            btn.innerHTML = `
+                <span class="prod-nombre">${producto.nombre}</span>
+                <span class="prod-precio">S/ ${producto.precio.toFixed(2)}</span>
+            `;
+            contenedor.appendChild(btn);
+        });
+    }
+
+    // 3. AGREGAR / QUITAR PRODUCTOS
+    function agregarAlTicket(id_prod) {
+        if (!ordenActual[id_prod]) {
+            ordenActual[id_prod] = 0;
+        }
+        ordenActual[id_prod]++;
+        actualizarPantallaTicket();
+    }
+
+    function quitarDelTicket(id_prod) {
+        if (ordenActual[id_prod]) {
+            ordenActual[id_prod]--;
+            if (ordenActual[id_prod] <= 0) {
+                delete ordenActual[id_prod];
+            }
+            actualizarPantallaTicket();
+        }
+    }
+
+    // 4. ACTUALIZAR LA PANTALLA DEL TICKET
+    function actualizarPantallaTicket() {
+        const lista = document.getElementById('ticket-lista');
+        const btnCobrar = document.getElementById('btn-cobrar');
+        const spanTotal = document.getElementById('ticket-total');
+        
+        lista.innerHTML = "";
+        let sumaTotal = 0.0;
+        let hayItems = false;
+
+        Object.keys(ordenActual).forEach(id_prod => {
+            hayItems = true;
+            const cantidad = ordenActual[id_prod];
+            const producto = menuActivo[id_prod];
+            const subtotal = cantidad * producto.precio;
+            sumaTotal += subtotal;
+
+            const div = document.createElement('div');
+            div.className = 'item-row';
+            div.innerHTML = `
+                <div class="item-info">
+                    <div class="item-nombre">${producto.nombre}</div>
+                    <div class="item-detalle">${cantidad} x S/ ${producto.precio.toFixed(2)}</div>
+                </div>
+                <div class="item-total">S/ ${subtotal.toFixed(2)}</div>
+                <button class="btn-quitar" onclick="quitarDelTicket('${id_prod}')">X</button>
+            `;
+            lista.appendChild(div);
+        });
+
+        if (!hayItems) {
+            lista.innerHTML = `<div style="text-align: center; color: #94a3b8; margin-top: 40px; font-size: 14px;">Haz clic en un producto para agregarlo a la orden.</div>`;
+            btnCobrar.disabled = true;
+            spanTotal.innerText = "S/ 0.00";
+        } else {
+            btnCobrar.disabled = false;
+            spanTotal.innerText = `S/ ${sumaTotal.toFixed(2)}`;
+        }
+    }
+
+    function limpiarTicket() {
+        ordenActual = {};
+        actualizarPantallaTicket();
+    }
+
+    // 5. ENVIAR LA VENTA A GOOGLE CLOUD
+    async function procesarVenta() {
+        const btnCobrar = document.getElementById('btn-cobrar');
+        btnCobrar.disabled = true;
+        btnCobrar.innerText = "Sincronizando...";
+
+        // Preparamos el paquete de ventas
+        const payload_crudas = Object.keys(ordenActual).map(key => {
+            return { id_prod: key, cantidad: ordenActual[key] };
+        });
+
+        // Este ID es el que el dashboard ahora puede leer sin problemas
+        const paqueteFinal = {
+            vendedor_id: "terminal_principal", 
+            ventas: payload_crudas
+        };
+
+        try {
+            const respuesta = await fetch(URL_PROCESAR_VENTA, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(paqueteFinal)
+            });
+
+            const datosRespuesta = await respuesta.json();
+
+            if (respuesta.ok) {
+                alert(`✅ ¡Venta registrada exitosamente!\n\nRecibo: ${datosRespuesta.id_recibo}\nTotal Confirmado en Nube: S/ ${datosRespuesta.total_calculado.toFixed(2)}`);
+                limpiarTicket();
+            } else {
+                alert("❌ Error en el servidor al registrar la venta.");
+            }
+
+        } catch (error) {
+            alert("❌ Error de red. No se pudo conectar con Google Cloud.");
+        }
+        
+        btnCobrar.innerText = "Emitir Recibo y Cobrar";
+    }
+</script>
+
+</body>
+</html>
