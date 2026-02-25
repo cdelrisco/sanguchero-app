@@ -21,7 +21,7 @@ steps:
         echo "🌐 Actualizando páginas web en Cloud Storage..."
         # Reemplaza 'mi-sangucheria-site' por el nombre real de tu bucket
         gcloud storage cp index.html gs://mi-sangucheria-site/
-        gcloud storage cp admin.html gs://mi-sangucheria-site/
+        gcloud storage cp my-admin.html gs://mi-sangucheria-site/
 
 options:
   logging: CLOUD_LOGGING_ONLY
